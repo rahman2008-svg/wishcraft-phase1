@@ -1,0 +1,19 @@
+{
+  "name": "wishcraft",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WishCraft — Create • Share • Celebrate. Monorepo root with convenience scripts for the backend and frontend workspaces.",
+  "scripts": {
+    "install:backend": "npm install --prefix backend",
+    "install:frontend": "npm install --prefix frontend",
+    "install:all": "npm run install:backend && npm run install:frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "prisma:migrate": "npm run prisma:migrate --prefix backend",
+    "prisma:seed": "npm run prisma:seed --prefix backend",
+    "build:frontend": "npm run build --prefix frontend"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  }
+}

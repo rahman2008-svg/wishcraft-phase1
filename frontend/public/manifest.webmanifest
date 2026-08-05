@@ -1,0 +1,17 @@
+{
+  "name": "WishCraft — Create • Share • Celebrate",
+  "short_name": "WishCraft",
+  "description": "Design beautiful greeting pages for any occasion and share a permanent link in minutes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0b1a",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

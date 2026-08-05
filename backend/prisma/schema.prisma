@@ -1,0 +1,259 @@
+// WishCraft — Prisma Schema
+// This schema is intentionally complete for ALL planned phases of WishCraft,
+// even though Phase 1 only implements the User model in application code.
+// Building it now avoids breaking migrations later.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum WishStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EventType {
+  BIRTHDAY
+  WEDDING
+  ANNIVERSARY
+  GRADUATION
+  BABY_SHOWER
+  HOUSE_WARMING
+  ENGAGEMENT
+  FAREWELL
+  CONGRATULATIONS
+  THANK_YOU
+  EID_MUBARAK
+  RAMADAN
+  CHRISTMAS
+  NEW_YEAR
+  VALENTINES_DAY
+  FATHERS_DAY
+  MOTHERS_DAY
+  DIWALI
+  CUSTOM
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum NotificationType {
+  COMMENT
+  LIKE
+  VIEW
+  SYSTEM
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+// ---------------------------------------------------------------------------
+// MODELS
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  password      String
+  name          String
+  avatarUrl     String?
+  bio           String?
+  website       String?
+  socialLinks   Json?
+  role          Role      @default(USER)
+  isVerified    Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  refreshToken  String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  wishPages     WishPage[]
+  comments      Comment[]
+  likes         Like[]
+  notifications Notification[]
+  reports       Report[]
+
+  @@map("users")
+}
+
+model Template {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  category     String
+  description  String?
+  thumbnailUrl String
+  isPremium    Boolean  @default(false)
+  isActive     Boolean  @default(true)
+  config       Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  wishPages    WishPage[]
+
+  @@map("templates")
+  @@index([category])
+}
+
+model WishPage {
+  id                String     @id @default(uuid())
+  uuid              String     @default(uuid()) @unique
+  slug              String     @unique
+  userId            String
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateId        String
+  template          Template   @relation(fields: [templateId], references: [id])
+
+  eventType         EventType
+  status            WishStatus @default(DRAFT)
+
+  recipientName     String
+  senderName        String
+  title             String
+  message            String   @db.Text
+  eventDate         DateTime?
+  location          String?
+  phone             String?
+  email             String?
+  website           String?
+  googleMapsUrl     String?
+
+  countdownEnabled  Boolean    @default(false)
+  coverPhotoUrl     String?
+  recipientPhotoUrl String?
+  musicUrl          String?
+
+  theme             Json?
+  animationSettings Json?
+
+  viewCount         Int        @default(0)
+  publishedAt       DateTime?
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  media             Media[]
+  comments          Comment[]
+  likes             Like[]
+  analytics         Analytics[]
+  reports           Report[]
+
+  @@map("wish_pages")
+  @@index([userId])
+  @@index([slug])
+  @@index([status])
+}
+
+model Media {
+  id         String    @id @default(uuid())
+  wishPageId String
+  wishPage   WishPage  @relation(fields: [wishPageId], references: [id], onDelete: Cascade)
+  type       MediaType
+  url        String
+  publicId   String
+  order      Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@map("media")
+  @@index([wishPageId])
+}
+
+model Comment {
+  id         String    @id @default(uuid())
+  wishPageId String
+  wishPage   WishPage  @relation(fields: [wishPageId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestName  String?
+  content    String    @db.Text
+  parentId   String?
+  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies    Comment[] @relation("CommentReplies")
+  isReported Boolean   @default(false)
+  isDeleted  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@map("comments")
+  @@index([wishPageId])
+}
+
+model Like {
+  id         String   @id @default(uuid())
+  wishPageId String
+  wishPage   WishPage @relation(fields: [wishPageId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ipAddress  String?
+  emoji      String   @default("❤️")
+  createdAt  DateTime @default(now())
+
+  @@map("likes")
+  @@unique([wishPageId, ipAddress, emoji])
+}
+
+model Analytics {
+  id         String   @id @default(uuid())
+  wishPageId String
+  wishPage   WishPage @relation(fields: [wishPageId], references: [id], onDelete: Cascade)
+  ipAddress  String?
+  country    String?
+  city       String?
+  device     String?
+  browser    String?
+  os         String?
+  referrer   String?
+  visitedAt  DateTime @default(now())
+
+  @@map("analytics")
+  @@index([wishPageId])
+  @@index([visitedAt])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@map("notifications")
+  @@index([userId])
+}
+
+model Report {
+  id         String       @id @default(uuid())
+  wishPageId String?
+  wishPage   WishPage?    @relation(fields: [wishPageId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reason     String
+  status     ReportStatus @default(PENDING)
+  createdAt  DateTime     @default(now())
+
+  @@map("reports")
+}
