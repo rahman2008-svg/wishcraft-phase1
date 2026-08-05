@@ -1,3 +1,4 @@
+import multer from 'multer';
 import { Prisma } from '@prisma/client';
 import { ApiError } from '../utils/ApiError.js';
 import { env } from '../config/env.js';
@@ -39,6 +40,10 @@ export const errorHandler = (err, req, res, next) => {
       error = prismaMapped;
     } else if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
       error = ApiError.unauthorized('Invalid or expired token');
+    } else if (err instanceof multer.MulterError) {
+      const message =
+        err.code === 'LIMIT_FILE_SIZE' ? 'File is too large' : `Upload error: ${err.message}`;
+      error = ApiError.badRequest(message);
     } else {
       error = new ApiError(err.statusCode || 500, err.message || 'Something went wrong', [], false);
     }

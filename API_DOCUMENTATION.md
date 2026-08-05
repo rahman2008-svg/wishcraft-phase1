@@ -199,8 +199,194 @@ in again after this call.
 
 ---
 
+---
+
+# Phase 2 — Templates, Wishes, and Media
+
+## Templates
+
+### `GET /templates`
+
+Public. Optional `?category=` query filters by category.
+
+**Response `200`**
+```json
+{ "success": true, "data": { "templates": [ { "id": "...", "name": "Premium Dark", "slug": "premium-dark", "category": "Premium", "thumbnailUrl": "...", "isPremium": true, "config": { "background": "#0b0b0f", "accent": "#d4af37", "font": "Playfair Display" } } ], "count": 11 } }
+```
+
+### `GET /templates/:slug`
+
+Public. Returns a single template or `404`.
+
+---
+
+## Wishes
+
+### `POST /wishes`  🔒 requires auth
+
+Creates a new wish page as a `DRAFT`. All required content fields are
+collected up front, so the slug (and therefore the permanent share link) is
+generated immediately and never changes.
+
+**Body**
+```json
+{
+  "eventType": "BIRTHDAY",
+  "templateId": "<template-uuid>",
+  "recipientName": "Sadia Rahman",
+  "senderName": "Aariz",
+  "title": "Happy Birthday, Sadia!",
+  "message": "Wishing you the most joyful year yet.",
+  "eventDate": "2026-09-12T00:00:00.000Z",
+  "location": "Dhaka, Bangladesh",
+  "phone": "+8801XXXXXXXXX",
+  "email": "sadia@example.com",
+  "website": "https://example.com",
+  "googleMapsUrl": "https://maps.google.com/...",
+  "countdownEnabled": true,
+  "slugHint": "sadia-birthday"
+}
+```
+`slugHint` is optional — if omitted, the slug is derived from `recipientName`.
+On collision, WishCraft appends `-2`, `-3`, etc. automatically.
+
+**Response `201`**
+```json
+{
+  "success": true,
+  "data": {
+    "wish": { "id": "...", "slug": "sadia-birthday", "uuid": "...", "status": "DRAFT", "eventType": "BIRTHDAY", "template": { "...": "..." }, "media": [] },
+    "shareUrl": "/w/sadia-birthday"
+  }
+}
+```
+
+**Errors**: `400` validation, `404` if `templateId` doesn't match an active template.
+
+---
+
+### `GET /wishes/mine`  🔒 requires auth
+
+Lists the authenticated user's wish pages, newest-updated first.
+
+**Query params**: `status` (`DRAFT`|`PUBLISHED`|`ARCHIVED`, optional), `page` (default 1), `limit` (default 20, max 50).
+
+**Response `200`**
+```json
+{ "success": true, "data": { "wishes": [ /* ... */ ], "pagination": { "page": 1, "limit": 20, "total": 3, "totalPages": 1 } } }
+```
+
+---
+
+### `GET /wishes/:id`  🔒 requires auth, owner only
+
+Full detail view (for editing) including ordered media. `403` if you don't own it, `404` if it doesn't exist.
+
+---
+
+### `PATCH /wishes/:id`  🔒 requires auth, owner only
+
+Partial update — send only the fields you're changing. Used throughout the
+create-wish flow (cover photo, theme, animation, countdown, etc.) and for
+later edits.
+
+**Body (all optional)**
+```json
+{
+  "coverPhotoUrl": "https://res.cloudinary.com/.../cover.jpg",
+  "theme": { "color": "#7c3aed", "font": "Fraunces" },
+  "animationSettings": { "effect": "confetti" },
+  "countdownEnabled": true
+}
+```
+
+---
+
+### `PATCH /wishes/:id/publish`  🔒 requires auth, owner only
+
+Transitions the page from `DRAFT` to `PUBLISHED` and sets `publishedAt`.
+Idempotent — calling it again on an already-published page is a no-op.
+
+**Response `200`**
+```json
+{ "success": true, "data": { "wish": { "...": "...", "status": "PUBLISHED" }, "shareUrl": "/w/sadia-birthday" } }
+```
+
+### `PATCH /wishes/:id/unpublish`  🔒 requires auth, owner only
+
+Moves a page back to `DRAFT` (unlists it from public view without deleting it).
+
+### `DELETE /wishes/:id`  🔒 requires auth, owner only
+
+Deletes the wish page, its `Media` rows, and best-effort removes the
+associated Cloudinary assets.
+
+---
+
+### `GET /wishes/public/:slug`
+
+**No auth.** Returns a wish page only if it's `PUBLISHED` — drafts and
+archived pages 404 here regardless of who asks, so a shared draft link can
+never leak content. Increments `viewCount` on each call (fire-and-forget,
+doesn't block the response).
+
+---
+
+### `POST /wishes/:id/media`  🔒 requires auth, owner only
+
+Attaches an already-uploaded Cloudinary asset (see `/media/upload` below) to
+a wish page's gallery.
+
+**Body**
+```json
+{ "url": "https://res.cloudinary.com/.../photo.jpg", "publicId": "wishcraft/gallery/abc123", "type": "IMAGE", "order": 0 }
+```
+
+### `DELETE /wishes/:id/media/:mediaId`  🔒 requires auth, owner only
+
+Removes a gallery item and deletes the underlying Cloudinary asset.
+
+---
+
+## Media
+
+### `POST /media/upload`  🔒 requires auth
+
+`multipart/form-data` with a single field named `file`. Optional `folder`
+field (alphanumeric/hyphen/underscore, max 40 chars) organizes uploads in
+Cloudinary, e.g. `folder=gallery` or `folder=music`.
+
+Accepted types: JPEG/PNG/WebP/GIF (images, max 8MB), MP4/WebM/QuickTime
+(video, max 50MB), MP3/WAV/OGG (audio, max 15MB).
+
+This endpoint only uploads and returns the result — it does not write to the
+database. Use the returned `url`/`publicId` with `PATCH /wishes/:id` (for
+`coverPhotoUrl`, `recipientPhotoUrl`, or `musicUrl`) or `POST
+/wishes/:id/media` (for gallery items).
+
+**Response `201`**
+```json
+{
+  "success": true,
+  "data": {
+    "url": "https://res.cloudinary.com/wishcraft/image/upload/v.../abc123.jpg",
+    "publicId": "wishcraft/gallery/abc123",
+    "resourceType": "image",
+    "format": "jpg",
+    "width": 1600,
+    "height": 1200,
+    "bytes": 482113
+  }
+}
+```
+
+**Errors**: `400` for an unsupported type or a file over its size limit.
+
+---
+
 ## Endpoints planned for later phases
 
-`/wishes`, `/templates`, `/comments`, `/media` (Cloudinary uploads),
-`/analytics`, `/notifications`, `/admin/*` — the database schema already
-supports all of these; only the routes/controllers are pending.
+`/comments`, `/likes`, `/analytics`, `/notifications`, `/admin/*` — the
+database schema already supports all of these; only the routes/controllers
+are pending (Phase 3 builds the frontend for what's above; Phase 4 adds
+these interactive/analytics endpoints; Phase 5 is the admin panel).

@@ -33,12 +33,64 @@ deployable today to Render and Vercel.
 - **Deployment**: `render.yaml` blueprint for the API + managed Postgres, and
   `vercel.json` for the frontend, both ready to deploy as-is.
 
-## What's intentionally NOT in Phase 1
+## What's in Phase 2
 
-Wish creation/editing, public wish pages, comments, likes, analytics ingestion,
-search, and the admin panel are scoped to later phases per the build plan. The
-database schema already supports all of it — only the API/UI for those features
-is still to come.
+The wish engine's **backend API** is now complete and working end-to-end:
+
+- `POST /wishes` — create a wish page as a draft, with the permanent slug
+  generated immediately (with automatic `-2`/`-3` collision handling)
+- `GET /wishes/mine`, `GET /wishes/:id`, `PATCH /wishes/:id`, `DELETE /wishes/:id`
+  — full CRUD, all ownership-checked
+- `PATCH /wishes/:id/publish` / `/unpublish` — the draft → published transition
+- `GET /wishes/public/:slug` — public retrieval (published only, 404s
+  everything else so drafts never leak), with view-count tracking
+- `POST /media/upload` — real Cloudinary uploads (images/video/audio) via
+  streamed multipart, with type/size validation
+- `POST /wishes/:id/media` / `DELETE /wishes/:id/media/:mediaId` — gallery
+  management, with best-effort Cloudinary cleanup on delete
+- `GET /templates`, `GET /templates/:slug` — public template listing
+
+See `API_DOCUMENTATION.md` for full request/response examples.
+
+## What's intentionally NOT in Phase 2
+
+The **frontend** create-wish wizard, comments/likes/guestbook, analytics
+ingestion UI, search, and the admin panel are scoped to Phases 3–5 per the
+build plan. The database schema and backend API already support wish
+creation end-to-end — Phase 3 is the UI that calls it.
+
+---
+
+## What's in Phase 3
+
+The full **create-wish wizard** is now live end-to-end on the frontend,
+calling the real Phase 2 API at every step (no mocked data):
+
+1. **Event** — pick from all 19 event types
+2. **Template** — live-loaded from `GET /templates`
+3. **Info** — recipient/sender/title/message/date/location/contact fields;
+   submitting this step calls `POST /wishes` and creates the permanent slug
+4. **Media** — cover photo + gallery photos/video, uploaded to Cloudinary via
+   `POST /media/upload` and attached via `POST /wishes/:id/media`
+5. **Music** — background track upload
+6. **Customize** — accent color + celebration effect, persisted via `PATCH`
+7. **Preview & Publish** — live-rendered preview card, then `PATCH
+   /wishes/:id/publish`
+8. **Share** — permanent link, QR code, copy button, and WhatsApp / Facebook
+   / Messenger / Telegram / X share links
+
+Also shipped: a real **My Wishes** dashboard page (`/dashboard/wishes`) with
+publish/unpublish/delete, status filters, and copy-link — and the main
+Dashboard now shows live wish counts instead of static placeholders.
+
+## What's intentionally NOT in Phase 3
+
+The **public wish page itself** (`/w/:slug` rendering the published page for
+visitors) is Phase 4, along with comments, likes, guestbook, share/reaction
+UI on that page, and analytics ingestion. Right now, visiting a published
+share link in the browser will hit the app's 404 page — the *data* is fully
+live via `GET /wishes/public/:slug`, but there's no route rendering it yet.
+The admin panel is Phase 5.
 
 ---
 
@@ -52,12 +104,12 @@ wishcraft/
 │   │   └── seed.js             # Seeds templates + an admin account
 │   ├── src/
 │   │   ├── config/              # env, Prisma client, Cloudinary
-│   │   ├── controllers/         # HTTP layer
-│   │   ├── middleware/          # auth, validation, errors, rate limiting
+│   │   ├── controllers/         # HTTP layer (auth, template, wish, media)
+│   │   ├── middleware/          # auth, validation, errors, rate limit, upload
 │   │   ├── routes/               # Express routers
-│   │   ├── services/             # business logic
-│   │   ├── utils/                # ApiError, ApiResponse, asyncHandler, jwt
-│   │   ├── validators/           # Zod schemas
+│   │   ├── services/             # business logic (auth, template, wish, cloudinary)
+│   │   ├── utils/                # ApiError, ApiResponse, asyncHandler, jwt, slugify
+│   │   ├── validators/           # Zod schemas (auth, wish)
 │   │   ├── app.js               # Express app assembly
 │   │   └── server.js            # entrypoint + graceful shutdown
 │   ├── .env.example
@@ -66,17 +118,21 @@ wishcraft/
 ├── frontend/
 │   ├── public/                   # favicon, manifest, robots.txt
 │   ├── src/
-│   │   ├── api/                  # axios client + auth requests
+│   │   ├── api/                  # axios client + auth/template/wish/media requests
 │   │   ├── components/           # Navbar, Footer, route guards, layout
+│   │   │   └── wizard/             # 8-step create-wish wizard components
+│   │   ├── constants/              # event types, animation effects, theme colors
 │   │   ├── context/               # Auth + Theme providers
-│   │   ├── hooks/                 # useAuth
-│   │   ├── pages/                  # Home, Login, Register, Dashboard, 404
+│   │   ├── hooks/                 # useAuth, useTemplates, useWishes
+│   │   ├── pages/                  # Home, Login, Register, Dashboard, MyWishes,
+│   │   │                            CreateWish, 404
 │   │   └── styles/                 # Tailwind layer + design tokens
 │   ├── .env.example
 │   ├── vercel.json
 │   └── package.json
 ├── API_DOCUMENTATION.md
 ├── DATABASE_SCHEMA.md
+├── PHASE1_VERIFICATION_CHECKLIST.md
 └── README.md
 ```
 
